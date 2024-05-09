@@ -1,16 +1,19 @@
 <script>
-  import { getContext, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { getDocument, PDFWorker } from 'pdfjs-dist';
   import { createWorker } from 'tesseract.js';
   import { rgb, PDFDocument, StandardFonts } from 'pdf-lib';
   import { DownloadAttachment, LoadUnstamped, UploadStamped } from '../../wailsjs/go/main/App.js'
 
-  let { userInfo } = getContext('user');
+  export let lastUpdated = new Date().toLocaleString();
   let unstamped = [];
 
-  onMount(async () => {
-    unstamped = await LoadUnstamped();
-  });
+  $: refresh = async () => {
+    unstamped = await LoadUnstamped() || [];
+    lastUpdated = new Date().toLocaleString();
+  };
+
+  onMount(() => refresh());
 
   const stamp = async () => {
     for (const pdf of unstamped) {
@@ -29,6 +32,8 @@
 
       updatePDFStatus(pdf, 'Complete');
     }
+
+    refresh();
   };
 
   const stampPDF = async (data) => {
@@ -106,10 +111,17 @@
           <div class="sm:flex-auto">
             <h1 class="text-base font-semibold leading-6 text-white">Unstamped PDFs</h1>
           </div>
-          <div class="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+          <div class="flex gap-x-3 mt-4">
             <button
               type="button"
-              class="block rounded-md bg-indigo-500 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              class="block rounded-md bg-white px-3 py-2 text-center text-sm font-semibold ring-1 ring-inset ring-slate-300 shadow-sm text-slate-900 hover:bg-slate-50"
+              on:click={refresh}
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              class="block rounded-md bg-sky-500 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
               on:click={stamp}
             >
               Stamp PDFs
@@ -142,7 +154,12 @@
                     </th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-800">
+                <tbody class="divide-y divide-slate-800">
+                  <tr class="hidden only:table-row">
+                    <td colspan="4" class="py-4 pl-4 text-sm font-medium text-white sm:pl-0">
+                      There are currently no PDFs to stamp.
+                    </td>
+                  </tr>
                   {#each unstamped as pdf}
                     <tr>
                       <td
@@ -162,6 +179,13 @@
                     </tr>
                   {/each}
                 </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="4" class="py-4 pl-4 text-xs font-medium text-right text-white sm:pl-0">
+                      Last updated {lastUpdated}.
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
