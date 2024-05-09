@@ -78,10 +78,11 @@
 
         if (firstPage) {
           firstPage = false;
+          const size = page.getSize();
 
           page.drawText(`FILED ${new Date().toLocaleDateString()} NYS Department of State`, {
             x: 200,
-            y: 4000,
+            y: size.height * 7.7,
             size: 50,
             font: helveticaFont,
             color: rgb(0.95, 0.1, 0.1)
