@@ -55,7 +55,7 @@ func (a *App) LoadUnstamped() []Oath {
 		GetList("Lists/OathOfOfficeReviews1").
 		Items().
 		Select("Id,CreationDate,StagedforFiling,SubmitterName").
-		Filter("StagedforFiling eq null").
+		Filter("(StagedforFiling eq null) and (Filing_x003a_Determination/Value eq 'Approved')").
 		Get()
 
 	items := []Oath{}
