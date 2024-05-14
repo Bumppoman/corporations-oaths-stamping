@@ -1,9 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { getDocument, PDFWorker } from 'pdfjs-dist';
-  import { createWorker } from 'tesseract.js';
-  import { rgb, PDFDocument, StandardFonts } from 'pdf-lib';
   import { DownloadAttachment, LoadUnstamped, UploadStamped } from '../../wailsjs/go/main/App.js'
+  import { stampPDF } from '../stamping.js'
 
   export let lastUpdated = new Date().toLocaleString();
   let unstamped = [];
@@ -18,82 +16,42 @@
   const stamp = async () => {
     for (const pdf of unstamped) {
       updatePDFStatus(pdf, 'Downloading');
-      const blob = await DownloadAttachment(pdf.Id);
+      let blob = await DownloadAttachment(pdf.Id);
 
+      // Retry download once
+      if (!blob) {
+        blob = await DownloadAttachment(pdf.Id);
+        if (!blob) {
+          updatePDFStatus(pdf, 'Error');
+          continue;
+        }
+      }
+
+      // Stamp PDF (unrecoverable on failure)
       updatePDFStatus(pdf, 'Stamping');
       const stamped = await stampPDF(Uint8Array.from(atob(blob), c => c.charCodeAt(0)));
+      if (!stamped) {
+        updatePDFStatus(pdf, 'Error');
+        continue;
+      }
 
+      // Upload stamped PDF
       updatePDFStatus(pdf, 'Uploading');
       const base64PDF = [];
       for (const byte of stamped) {
         base64PDF.push(String.fromCharCode(byte));
       }
-      await UploadStamped(pdf.Id, btoa(base64PDF.join('')));
+      const error = await UploadStamped(pdf.Id, btoa(base64PDF.join('')));
+
+      if (error) {
+        updatePDFStatus(pdf, 'Error');
+        continue;
+      }
 
       updatePDFStatus(pdf, 'Complete');
     }
 
     refresh();
-  };
-
-  const stampPDF = async (data) => {
-    const pdfWorker = new PDFWorker({
-      port: new Worker(new URL('pdfjs-dist/build/pdf.worker.min.js', import.meta.url))
-    });
-
-    const pdfDocument = await getDocument({ data, worker: pdfWorker }).promise;
-
-    const pages = [];
-    for (let i = 1; i <= pdfDocument.numPages; i++) {
-      const page = await pdfDocument.getPage(i);
-      const viewport = page.getViewport({ scale: 4.0 });
-
-      const canvas = document.createElement('canvas');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-      pages.push(canvas.toDataURL('image/jpeg'));
-    }
-
-    const tesseractWorker = await createWorker('eng', 1, {
-      cachePath: '../assets/resources'
-    });
-
-    const response = [];
-    for (const page of pages) {
-      const {
-        data: { pdf }
-      } = await tesseractWorker.recognize(page, { pdfTitle: 'Stamped PDF' }, { pdf: true });
-
-      response.push(Uint8Array.from(pdf));
-    }
-
-      const pdfDoc = await PDFDocument.load(await new Blob(response).arrayBuffer());
-      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-      let firstPage = true;
-      for (const page of pdfDoc.getPages()) {
-        page.scale(0.125, 0.125);
-
-        if (firstPage) {
-          firstPage = false;
-          const size = page.getSize();
-
-          page.drawText(`FILED ${new Date().toLocaleDateString()} NYS Department of State`, {
-            x: 200,
-            y: size.height * 7.7,
-            size: 50,
-            font: helveticaFont,
-            color: rgb(0.95, 0.1, 0.1)
-          });
-        }
-      }
-
-      const pdfBytes = await pdfDoc.save();
-      await tesseractWorker.terminate();
-
-      return pdfBytes;
   };
 
   const updatePDFStatus = (pdf, status) => {
@@ -183,7 +141,7 @@
                 <tfoot>
                   <tr>
                     <td colspan="4" class="py-4 pl-4 text-xs font-medium text-right text-white sm:pl-0">
-                      Last updated {lastUpdated}.
+                      Last updated {lastUpdated}
                     </td>
                   </tr>
                 </tfoot>
