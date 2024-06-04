@@ -5,7 +5,7 @@ import {api} from '../models';
 
 export function DownloadAttachment(arg1:number):Promise<string>;
 
-export function LoadUnstamped():Promise<Array<main.Oath>>;
+export function LoadUnstamped():Promise<Array<main.StampingItem>>;
 
 export function SignIn():Promise<api.UserInfo>;
 

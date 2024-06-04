@@ -18,10 +18,11 @@ type App struct {
 	ctx context.Context
 }
 
-type Oath struct {
+type StampingItem struct {
 	ID int `json:"Id"`
 	CreationDate string `json:"CreationDate"`
-	StagedforFiling time.Time `json:"StagedforFiling"`
+	StagedforFiling bool `json:"StagedforFiling"`
+	StampText string `json:"StampText"`
 	SubmitterName string `json:"SubmitterName"`
 }
 
@@ -30,11 +31,11 @@ func NewApp() *App {
 	return &App{}
 }
 
-// Download the unstamped oath attachment
+// Download the unstamped attachment
 func (a *App) DownloadAttachment(id int) string {
 	sp := getClient()
 
-	// Load oath review item
+	// Load review item
 	item := sp.Web().
 		GetList("Lists/OathOfOfficeReviews1").
 		Items().
@@ -45,18 +46,18 @@ func (a *App) DownloadAttachment(id int) string {
 		Attachments().
 		Get()
 
-	// Get the first attachment (unstamped oath)
+	// Get the first attachment (unstamped item)
 	pdfFilename := attachments.Data()[0].Data().FileName
 	attachment, _ := item.Attachments().GetByName(pdfFilename).Download()
 
-	// Return the Base64 encoded unstamped oath
+	// Return the Base64 encoded unstamped item
 	return base64.StdEncoding.EncodeToString(attachment)
 }
 
-func (a *App) LoadUnstamped() []Oath {
+func (a *App) LoadUnstamped() []StampingItem {
 	sp := getClient()
 
-	// Load unstamped oath review items
+	// Load unstamped review items
 	listItems, _ := sp.Web().
 		GetList("Lists/OathOfOfficeReviews1").
 		Items().
@@ -65,10 +66,10 @@ func (a *App) LoadUnstamped() []Oath {
 		Get()
 
 	// Unmarshal the JSON into a Go struct
-	items := []Oath{}
+	items := []StampingItem{}
 	json.Unmarshal(listItems.Normalized(), &items)
 
-	// Return the list of unstamped oath review items
+	// Return the list of unstamped review items
 	return items
 }
 
@@ -96,17 +97,17 @@ func (a *App) SignIn() *api.UserInfo {
 	return response.Data()
 }
 
-// Upload the stamped oath attachment
+// Upload the stamped attachment
 func (a *App) UploadStamped(id int, stamped string) error {
-	// Decode the Base64 encoded stamped oath
+	// Decode the Base64 encoded stamped attachment
 	pdfArray, _ := base64.StdEncoding.DecodeString(stamped)
 	pdf := bytes.NewReader(pdfArray)
 
-	// Get the oath review item
+	// Get the review item
 	sp := getClient()
 	item := sp.Web().GetList("Lists/OathOfOfficeReviews1").Items().GetByID(id)
 
-	// Remove unstamped oath attachment
+	// Remove unstamped attachment
 	attachments, _ := item.Attachments().Get()
 	attachment := attachments.Data()[0].Data().FileName
 	err := item.Attachments().GetByName(attachment).Delete()
@@ -117,7 +118,7 @@ func (a *App) UploadStamped(id int, stamped string) error {
 		}
 	}
 
-	// Add stamped oath attachment
+	// Add stamped attachment
 	_, err = item.Attachments().Add("stamped.pdf", pdf)
 	if err != nil {
 		_, err = item.Attachments().Add("stamped.pdf", pdf)

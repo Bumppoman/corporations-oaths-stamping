@@ -29,42 +29,25 @@ export namespace api {
 
 export namespace main {
 	
-	export class Oath {
+	export class StampingItem {
 	    Id: number;
 	    CreationDate: string;
-	    // Go type: time
-	    StagedforFiling: any;
+	    StagedforFiling: boolean;
+	    StampText: string;
 	    SubmitterName: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Oath(source);
+	        return new StampingItem(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Id = source["Id"];
 	        this.CreationDate = source["CreationDate"];
-	        this.StagedforFiling = this.convertValues(source["StagedforFiling"], null);
+	        this.StagedforFiling = source["StagedforFiling"];
+	        this.StampText = source["StampText"];
 	        this.SubmitterName = source["SubmitterName"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 
 }

@@ -48,38 +48,53 @@ export async function stampPDF(data) {
   }
 
   // Load the unstamped, scaled, OCR'd PDF document for stamping
-  const pdfDoc = await PDFDocument.load(await new Blob(response).arrayBuffer());
-  const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const originalDocument = await PDFDocument.load(await new Blob(response).arrayBuffer());
+  const newDocument = await PDFDocument.create();
+  const helveticaFont = await newDocument.embedFont(StandardFonts.Helvetica);
 
   // Stamp the first page of the PDF document and scale the pages back down
   let firstPage = true;
-  for (const page of pdfDoc.getPages()) {
+  for (const page of originalDocument.getPages()) {
     // Scale the page back down to its original size
-    page.scale(0.125, 0.125);
+    page.scale(0.25, 0.25);
 
-      // Stamp the first page only
-      if (firstPage) {
-        firstPage = false;
-        const size = page.getSize();
+    // Stamp the first page only
+    if (firstPage) {
+      firstPage = false;
 
-        // Perform the stamping
-        page.drawText(`FILED ${new Date().toLocaleDateString()} NYS Department of State`, {
-          x: 200,
-          y: size.height * 7.7,
-          size: 50,
-          font: helveticaFont,
-          color: rgb(0.95, 0.1, 0.1)
-        });
-      }
+      // Add the scaled page to the new document
+      const embeddedPage = await newDocument.embedPage(page);
+      const newPage = newDocument.addPage();
+      const scaled = embeddedPage.scale(0.9);
+
+      // Draw the scaled page on the new page
+      newPage.drawPage(embeddedPage, {
+        ...scaled,
+        x: (newPage.getWidth() - scaled.width) / 2,
+        y: (newPage.getHeight() - scaled.height) - ((newPage.getHeight() - scaled.height) / 2)
+      });
+
+      // Perform the stamping
+      newPage.drawText(`FILED ${new Date().toLocaleDateString()} NYS Department of State`, {
+        x: 50,
+        y: newPage.getHeight() - 50,
+        size: 11,
+        font: helveticaFont,
+        color: rgb(0.95, 0.1, 0.1)
+      });
+    } else {
+      // Add the page to the new document
+      newDocument.addPage(page);
     }
+  }
 
-    // Save the stamped PDF document
-    const pdfBytes = await pdfDoc.save();
+  // Save the stamped PDF document
+  const pdfBytes = await newDocument.save();
 
-    // Terminate the service workers
-    await tesseractWorker.terminate();
-    pdfWorker.destroy();
+  // Terminate the service workers
+  await tesseractWorker.terminate();
+  pdfWorker.destroy();
 
-    // Return the stamped PDF document as an ArrayBuffer
-    return pdfBytes;
+  // Return the stamped PDF document as an ArrayBuffer
+  return pdfBytes;
 }
