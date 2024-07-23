@@ -2,7 +2,7 @@ import { getDocument, PDFWorker } from 'pdfjs-dist';
 import { createWorker } from 'tesseract.js';
 import { rgb, PDFDocument, StandardFonts } from 'pdf-lib';
 
-export async function stampPDF(data) {
+export async function stampPDF(data, stampText) {
   // Create the service worker for PDF display
   const pdfWorker = new PDFWorker({
     port: new Worker(
@@ -64,10 +64,11 @@ export async function stampPDF(data) {
 
       // Add the scaled page to the new document
       const embeddedPage = await newDocument.embedPage(page);
-      const newPage = newDocument.addPage();
+      const newPage = newDocument.addPage([page.getWidth(), page.getHeight()]);
       const scaled = embeddedPage.scale(0.9);
 
       // Draw the scaled page on the new page
+      console.log(newPage.getHeight(), scaled.height, (newPage.getHeight() - scaled.height), ((newPage.getHeight() - scaled.height) - ((newPage.getHeight() - scaled.height) / 2)))
       newPage.drawPage(embeddedPage, {
         ...scaled,
         x: (newPage.getWidth() - scaled.width) / 2,
@@ -75,7 +76,7 @@ export async function stampPDF(data) {
       });
 
       // Perform the stamping
-      newPage.drawText(`FILED ${new Date().toLocaleDateString()} NYS Department of State`, {
+      newPage.drawText(stampText, {
         x: 50,
         y: newPage.getHeight() - 50,
         size: 11,

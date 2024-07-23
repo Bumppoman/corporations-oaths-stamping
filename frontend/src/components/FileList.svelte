@@ -7,14 +7,15 @@
   let unstamped = [];
 
   $: refresh = async () => {
-    unstamped = await LoadUnstamped() || [];
+    const rawUnstamped = await LoadUnstamped() || [];
+    unstamped  = rawUnstamped.map(pdf => ({ ...pdf, Selected: true }));
     lastUpdated = new Date().toLocaleString();
   };
 
   onMount(() => refresh());
 
   const stamp = async () => {
-    for (const pdf of unstamped) {
+    for (const pdf of unstamped.filter(pdf => pdf.Selected)) {
       updatePDFStatus(pdf, 'Downloading');
       let blob = await DownloadAttachment(pdf.Id);
 
@@ -29,7 +30,7 @@
 
       // Stamp PDF (unrecoverable on failure)
       updatePDFStatus(pdf, 'Stamping');
-      const stamped = await stampPDF(Uint8Array.from(atob(blob), c => c.charCodeAt(0)));
+      const stamped = await stampPDF(Uint8Array.from(atob(blob), c => c.charCodeAt(0)), pdf.StampText);
       if (!stamped) {
         updatePDFStatus(pdf, 'Error');
         continue;
@@ -93,6 +94,7 @@
               <table class="min-w-full divide-y divide-gray-700">
                 <thead>
                   <tr>
+                    <th scope="col"></th>
                     <th
                       scope="col"
                       class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-white sm:pl-0"
@@ -101,9 +103,6 @@
                     </th>
                     <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-white">
                       Submission Date
-                    </th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-white">
-                      Staged for Filing
                     </th>
                     <th
                       scope="col"
@@ -115,24 +114,28 @@
                 </thead>
                 <tbody class="divide-y divide-slate-800">
                   <tr class="hidden only:table-row">
-                    <td colspan="4" class="py-4 pl-4 text-sm font-medium text-white sm:pl-0">
+                    <td colspan="5" class="py-4 pl-4 text-sm font-medium text-white sm:pl-0">
                       There are currently no PDFs to stamp.
                     </td>
                   </tr>
                   {#each unstamped as pdf}
                     <tr>
+                      <td>
+                        <input
+                          type="checkbox"
+                          class="h-3 w-3 rounded border-slate-300 text-sky-600 focus:ring-sky-600"
+                          bind:checked={pdf.Selected}
+                        />
+                      </td>
                       <td
                         class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-0"
                       >
-                        {pdf.SubmitterName}
+                        {pdf.Title}
                       </td>
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                        {new Date(pdf.CreationDate).toLocaleDateString()}
+                      <td class="whitespace-nowrap px-3 py-4 text-sm text-slate-300">
+                        {new Date(pdf.Created).toLocaleDateString()}
                       </td>
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
-                        {pdf.StagedforFiling}
-                      </td>
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-300">
+                      <td class="whitespace-nowrap px-3 py-4 text-sm text-slate-300">
                         {pdf.status || 'Pending'}
                       </td>
                     </tr>

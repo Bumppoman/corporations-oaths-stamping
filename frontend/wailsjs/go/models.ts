@@ -29,12 +29,46 @@ export namespace api {
 
 export namespace main {
 	
+	export class SignInResponse {
+	    CanAccess: boolean;
+	    CurrentVersion: string;
+	    UserInfo?: api.UserInfo;
+	
+	    static createFrom(source: any = {}) {
+	        return new SignInResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.CanAccess = source["CanAccess"];
+	        this.CurrentVersion = source["CurrentVersion"];
+	        this.UserInfo = this.convertValues(source["UserInfo"], api.UserInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class StampingItem {
 	    Id: number;
-	    CreationDate: string;
-	    StagedforFiling: boolean;
+	    Created: string;
+	    Selected: boolean;
 	    StampText: string;
-	    SubmitterName: string;
+	    Title: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StampingItem(source);
@@ -43,10 +77,10 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Id = source["Id"];
-	        this.CreationDate = source["CreationDate"];
-	        this.StagedforFiling = source["StagedforFiling"];
+	        this.Created = source["Created"];
+	        this.Selected = source["Selected"];
 	        this.StampText = source["StampText"];
-	        this.SubmitterName = source["SubmitterName"];
+	        this.Title = source["Title"];
 	    }
 	}
 

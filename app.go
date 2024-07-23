@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/koltyakov/gosip"
@@ -13,17 +14,25 @@ import (
 	"github.com/koltyakov/gosip/api"
 )
 
+const StampingList = "Lists/Stampable%20Documents"
+
 // App struct
 type App struct {
 	ctx context.Context
 }
 
+type SignInResponse struct {
+	CanAccess      bool          `json:"CanAccess"`
+	CurrentVersion string        `json:"CurrentVersion"`
+	UserInfo       *api.UserInfo `json:"UserInfo"`
+}
+
 type StampingItem struct {
-	ID int `json:"Id"`
-	CreationDate string `json:"CreationDate"`
-	StagedforFiling bool `json:"StagedforFiling"`
-	StampText string `json:"StampText"`
-	SubmitterName string `json:"SubmitterName"`
+	ID            int    `json:"Id"`
+	CreationDate  string `json:"Created"`
+	Selected      bool   `json:"Selected"`
+	StampText     string `json:"StampText"`
+	SubmitterName string `json:"Title"`
 }
 
 // NewApp creates a new App application struct
@@ -35,9 +44,9 @@ func NewApp() *App {
 func (a *App) DownloadAttachment(id int) string {
 	sp := getClient()
 
-	// Load review item
+	// Load stampable item
 	item := sp.Web().
-		GetList("Lists/OathOfOfficeReviews1").
+		GetList(StampingList).
 		Items().
 		GetByID(id)
 
@@ -59,10 +68,10 @@ func (a *App) LoadUnstamped() []StampingItem {
 
 	// Load unstamped review items
 	listItems, _ := sp.Web().
-		GetList("Lists/OathOfOfficeReviews1").
+		GetList(StampingList).
 		Items().
-		Select("Id,CreationDate,StagedforFiling,SubmitterName").
-		Filter("StagedforFiling eq null and Filing/Determination eq 'Accepted'").
+		Select("Id,Title,StampText,Created").
+		Filter("Processed eq null").
 		Get()
 
 	// Unmarshal the JSON into a Go struct
@@ -73,11 +82,11 @@ func (a *App) LoadUnstamped() []StampingItem {
 	return items
 }
 
-func (a *App) SignIn() *api.UserInfo {
+func (a *App) SignIn() SignInResponse {
 	// Set the authentication strategy
 	// NOTE:  This is separate from the private getClient method because we need to reuse
 	// the client to clear the cookie cache if there is an error
-	authCnfg := &strategy.AuthCnfg {
+	authCnfg := &strategy.AuthCnfg{
 		SiteURL: "https://nysemail.sharepoint.com/sites/DOS/corp/Data",
 	}
 
@@ -93,8 +102,47 @@ func (a *App) SignIn() *api.UserInfo {
 		response, _ = sp.Web().CurrentUser().Get()
 	}
 
-	// Return the current user
-	return response.Data()
+	// Get the current version of the application for enforcement
+	versionResponse, _ := sp.Web().
+		GetList("Lists/StampingApplication").
+		Items().
+		Filter("Title eq 'CurrentVersion'").
+		Top(1).
+		Get()
+
+	version := versionResponse.ToMap()[0]["Value"].(string)
+
+	// Check whether the user has the appropriate permissions
+	http := api.NewHTTPClient(client)
+	endpoint := authCnfg.GetSiteURL() + "/_api/web/lists(guid'53774fcb-80f2-48f3-b2b5-fdaa781c7b75')/effectiveBasePermissions"
+	basePermissionsResponse, _ := http.Get(endpoint, nil)
+	rawBasePermissions := api.NormalizeODataItem(basePermissionsResponse)
+
+	// Unmarshal the base permissions (this obfuscation here seems to be due to SharePoint returning the integers as strings)
+	unmarshaledBasePermissions := &struct {
+		EffectiveBasePermissions struct {
+			High string `json:"High"`
+			Low  string `json:"Low"`
+		} `json:"EffectiveBasePermissions"`
+	}{}
+	json.Unmarshal(rawBasePermissions, &unmarshaledBasePermissions)
+
+	// Convert the base permissions to integers
+	high, _ := strconv.ParseInt(unmarshaledBasePermissions.EffectiveBasePermissions.High, 10, 64)
+	low, _ := strconv.ParseInt(unmarshaledBasePermissions.EffectiveBasePermissions.Low, 10, 64)
+
+	// Load and check permissions
+	basePermissions := api.BasePermissions{
+		High: high,
+		Low:  low,
+	}
+	canAccess := api.HasPermissions(basePermissions, api.PermissionKind.EditListItems)
+
+	return SignInResponse{
+		CanAccess:      canAccess,
+		CurrentVersion: version,
+		UserInfo:       response.Data(),
+	}
 }
 
 // Upload the stamped attachment
@@ -105,7 +153,10 @@ func (a *App) UploadStamped(id int, stamped string) error {
 
 	// Get the review item
 	sp := getClient()
-	item := sp.Web().GetList("Lists/OathOfOfficeReviews1").Items().GetByID(id)
+	item := sp.Web().
+		GetList(StampingList).
+		Items().
+		GetByID(id)
 
 	// Remove unstamped attachment
 	attachments, _ := item.Attachments().Get()
@@ -131,7 +182,7 @@ func (a *App) UploadStamped(id int, stamped string) error {
 	_, err = item.Update(
 		[]byte(
 			fmt.Sprintf(
-				`{"StagedforFiling": "%s"}`,
+				`{"Processed": "%s"}`,
 				time.Now().Format(time.RFC3339),
 			),
 		),
@@ -147,7 +198,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func getClient() *api.SP {
-	auth := &strategy.AuthCnfg {
+	auth := &strategy.AuthCnfg{
 		SiteURL: "https://nysemail.sharepoint.com/sites/DOS/corp/Data",
 	}
 

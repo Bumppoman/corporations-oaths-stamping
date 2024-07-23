@@ -2,10 +2,14 @@
   import { getContext } from 'svelte';
   import { SignIn } from '../../wailsjs/go/main/App.js'
 
+  let { appInfo } = getContext('app');
+  var response;
   let { userInfo } = getContext('user');
 
   const signIn = async () => {
-    $userInfo = await SignIn();
+    response = await SignIn();
+    $appInfo = { CanAccess: response.CanAccess, CurrentVersion: response.CurrentVersion };
+    $userInfo = response.UserInfo;
   };
 </script>
 
